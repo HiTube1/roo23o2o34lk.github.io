@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Сервер мессенджера - servermassew.c6t.ru</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f2f5;
+        }
+        #server-container {
+            max-width: 600px;
+            margin: 0 auto;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #chat-window {
+            height: 400px;
+            overflow-y: scroll;
+            padding: 10px;
+            background-color: #fff;
+        }
+        #server-log {
+            max-width: 600px;
+            margin: 20px auto;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 10px;
+            background-color: #fff;
+            height: 200px;
+            overflow-y: scroll;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 8px;
+            border-radius: 5px;
+            background-color: #e9ecef;
+        }
+        .log {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div id="server-container">
+        <div id="chat-window"></div>
+    </div>
+    <div id="server-log">
+        <div class="log">Сервер запущен на ws://servermassew.c6t.ru:8080</div>
+    </div>
+
+    <script>
+        const serverLog = document.getElementById('server-log');
+        const chatWindow = document.getElementById('chat-window');
+        const clients = new Set();
+        const correctPassword = 'secure123';
+        const chatHistory = [];
+
+        // Функция для логирования сообщений
+        function log(message) {
+            const logDiv = document.createElement('div');
+            logDiv.className = 'log';
+            logDiv.textContent = message;
+            serverLog.appendChild(logDiv);
+            serverLog.scrollTop = serverLog.scrollHeight;
+        }
+
+        // Функция для отображения сообщений в чате сервера
+        function displayMessage(message) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message';
+            messageDiv.textContent = message;
+            chatWindow.appendChild(messageDiv);
+            chatWindow.scrollTop = chatWindow.scrollHeight;
+        }
+
+        // Имитация WebSocket сервера
+        const wsServer = {
+            on: (event, handler) => {
+                if (event === 'connection') {
+                    return (ws) => {
+                        clients.add(ws);
+                        log('Новое подключение клиента.');
+                    };
+                }
+            },
+            broadcast: (message) => {
+                clients.forEach(client => {
+                    if (client.readyState === WebSocket.OPEN) {
+                        client.send(message);
+                    }
+                });
+            }
+        };
+
+        // Обработка подключений
+        wsServer.on('connection', (ws) => {
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'auth') {
+                    if (data.password === correctPassword) {
+                        ws.send(JSON.stringify({ type: 'auth', success: true }));
+                        // Отправляем историю чата
+                        ws.send(JSON.stringify({ type: 'history', messages: chatHistory }));
+                        log('Клиент успешно авторизован.');
+                    } else {
+                        ws.send(JSON.stringify({ type: 'auth', success: false }));
+                        ws.close();
+                        log('Клиент ввёл неверный пароль.');
+                    }
+                } else if (data.type === 'message') {
+                    chatHistory.push(data.message); // Сохраняем сообщение
+                    displayMessage(data.message); // Отображаем на сервере
+                    wsServer.broadcast(JSON.stringify({ type: 'message', message: data.message }));
+                    log(`Сообщение от клиента: ${data.message}`);
+                }
+            };
+            ws.onclose = () => {
+                clients.delete(ws);
+                log('Клиент отключился.');
+            };
+        });
+
+        // Имитация запуска сервера
+        log('Сервер готов к подключениям. Пароль: secure123');
+    </script>
+</body>
+</html>
